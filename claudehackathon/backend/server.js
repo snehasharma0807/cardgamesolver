@@ -4,7 +4,9 @@ const path = require('path');
 const fs = require('fs');
 require('dotenv').config();
 
+const cors = require('cors');
 const app = express();
+app.use(cors());
 const PORT = parseInt(process.env.PORT, 10) || 5000;
 
 // ensure uploads dir exists
@@ -33,7 +35,6 @@ app.post('/upload', upload.single('image'), (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'no file uploaded' });
   res.json({ filename: req.file.filename, path: `/uploads/${req.file.filename}` });
 });
-
 // Mock CV endpoint - accepts JSON { filename } and returns fake card bounding boxes
 app.post('/mock-cv', (req, res) => {
   const { filename } = req.body || {};
@@ -49,8 +50,25 @@ app.post('/mock-cv', (req, res) => {
   res.json({ filename, boxes, game: 'POKER', note: 'mocked results' });
 });
 
+// Analyze endpoint: accepts multipart image directly and returns mocked CV boxes
+app.post('/analyze', upload.single('image'), (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'no file uploaded' });
+  const filename = req.file.filename;
+  const boxes = [
+    { x: 0.12, y: 0.62, w: 0.11, h: 0.19, label: 'QC' },
+    { x: 0.28, y: 0.62, w: 0.11, h: 0.19, label: '9H' },
+    { x: 0.48, y: 0.52, w: 0.11, h: 0.19, label: '3D' }
+  ];
+  res.json({ filename, boxes, game: 'UNKNOWN', note: 'analyze-mock' });
+});
+
 // Serve uploads directory statically (for quick testing) - in production serve differently
 app.use('/uploads', express.static(UPLOAD_DIR));
+
+// improved error handler for unknown routes (placed at the end)
+app.use((req, res, next) => {
+  res.status(404).json({ error: 'not found' });
+});
 
 // Start server with automatic fallback if port is already in use
 function startServer(port, attemptsLeft = 10) {
