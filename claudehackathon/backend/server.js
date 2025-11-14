@@ -31,10 +31,10 @@ app.use(express.json());
 // Track active port (set when server starts)
 let ACTIVE_PORT = null;
 
-// meta endpoint for runtime information
-const pkg = require('./package.json');
+// meta endpoint for runtime information (pkg required later)
 app.get('/meta', (req, res) => {
-  res.json({ port: ACTIVE_PORT, uploadDir: UPLOAD_DIR, version: pkg.version });
+  const pkgLocal = require('./package.json');
+  res.json({ port: ACTIVE_PORT, uploadDir: UPLOAD_DIR, version: pkgLocal.version });
 });
 
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
