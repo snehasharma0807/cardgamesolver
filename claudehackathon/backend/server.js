@@ -5,7 +5,7 @@ const fs = require('fs');
 require('dotenv').config();
 
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = parseInt(process.env.PORT, 10) || 5000;
 
 // ensure uploads dir exists
 const UPLOAD_DIR = path.join(__dirname, 'uploads');
@@ -52,6 +52,28 @@ app.post('/mock-cv', (req, res) => {
 // Serve uploads directory statically (for quick testing) - in production serve differently
 app.use('/uploads', express.static(UPLOAD_DIR));
 
-app.listen(PORT, () => {
-  console.log(`Backend server listening on port ${PORT}`);
-});
+// Start server with automatic fallback if port is already in use
+function startServer(port, attemptsLeft = 10) {
+  const server = app.listen(port, () => {
+    console.log(`Backend server listening on port ${port}`);
+  });
+
+  server.on('error', (err) => {
+    if (err && err.code === 'EADDRINUSE') {
+      console.warn(`Port ${port} in use, ${attemptsLeft - 1} attempts left. Trying port ${port + 1}...`);
+      server.close && server.close();
+      if (attemptsLeft > 1) {
+        // try next port after short delay
+        setTimeout(() => startServer(port + 1, attemptsLeft - 1), 200);
+      } else {
+        console.error('No available ports found, exiting.');
+        process.exit(1);
+      }
+    } else {
+      console.error('Server error:', err);
+      process.exit(1);
+    }
+  });
+}
+
+startServer(PORT);
