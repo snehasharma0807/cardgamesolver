@@ -1,0 +1,3 @@
+flask
+# opencv may be optional; install opencv-python-headless if you want full CV
+opencv-python-headless
