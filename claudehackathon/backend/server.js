@@ -28,6 +28,15 @@ const upload = multer({ storage });
 
 app.use(express.json());
 
+// Track active port (set when server starts)
+let ACTIVE_PORT = null;
+
+// meta endpoint for runtime information
+const pkg = require('./package.json');
+app.get('/meta', (req, res) => {
+  res.json({ port: ACTIVE_PORT, uploadDir: UPLOAD_DIR, version: pkg.version });
+});
+
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
 
 // Accepts 'image' field multipart/form-data and saves it to uploads/
@@ -91,9 +100,6 @@ const pkg = require('./package.json');
 app.get('/meta', (req, res) => {
   res.json({ port: ACTIVE_PORT, uploadDir: UPLOAD_DIR, version: pkg.version });
 });
-
-// Track active port (set when server starts)
-let ACTIVE_PORT = null;
 
 // Start server with automatic fallback if port is already in use
 function startServer(port, attemptsLeft = 10) {
