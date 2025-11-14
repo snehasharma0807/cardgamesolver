@@ -9,8 +9,8 @@ const app = express();
 app.use(cors());
 const PORT = parseInt(process.env.PORT, 10) || 5000;
 
-// ensure uploads dir exists
-const UPLOAD_DIR = path.join(__dirname, 'uploads');
+// ensure uploads dir exists (configurable for tests via UPLOAD_DIR env)
+const UPLOAD_DIR = process.env.UPLOAD_DIR ? path.resolve(process.env.UPLOAD_DIR) : path.join(__dirname, 'uploads');
 if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
 const storage = multer.diskStorage({
@@ -33,6 +33,15 @@ app.get('/health', (req, res) => res.json({ status: 'ok' }));
 // Accepts 'image' field multipart/form-data and saves it to uploads/
 app.post('/upload', upload.single('image'), (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'no file uploaded' });
+  // optional runtime validation
+  if (process.env.ENFORCE_UPLOAD_VALIDATION === '1') {
+    const mimetype = req.file.mimetype || '';
+    if (!mimetype.startsWith('image/')) {
+      // delete the saved file
+      try { fs.unlinkSync(req.file.path); } catch (e) { /* ignore */ }
+      return res.status(415).json({ error: 'invalid file type' });
+    }
+  }
   res.json({ filename: req.file.filename, path: `/uploads/${req.file.filename}` });
 });
 // Mock CV endpoint - accepts JSON { filename } and returns fake card bounding boxes
@@ -53,6 +62,13 @@ app.post('/mock-cv', (req, res) => {
 // Analyze endpoint: accepts multipart image directly and returns mocked CV boxes
 app.post('/analyze', upload.single('image'), (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'no file uploaded' });
+  if (process.env.ENFORCE_UPLOAD_VALIDATION === '1') {
+    const mimetype = req.file.mimetype || '';
+    if (!mimetype.startsWith('image/')) {
+      try { fs.unlinkSync(req.file.path); } catch (e) { }
+      return res.status(415).json({ error: 'invalid file type' });
+    }
+  }
   const filename = req.file.filename;
   const boxes = [
     { x: 0.12, y: 0.62, w: 0.11, h: 0.19, label: 'QC' },
@@ -70,10 +86,20 @@ app.use((req, res, next) => {
   res.status(404).json({ error: 'not found' });
 });
 
+// meta endpoint for runtime information
+const pkg = require('./package.json');
+app.get('/meta', (req, res) => {
+  res.json({ port: ACTIVE_PORT, uploadDir: UPLOAD_DIR, version: pkg.version });
+});
+
+// Track active port (set when server starts)
+let ACTIVE_PORT = null;
+
 // Start server with automatic fallback if port is already in use
 function startServer(port, attemptsLeft = 10) {
   const server = app.listen(port, () => {
-    console.log(`Backend server listening on port ${port}`);
+    ACTIVE_PORT = server.address() && server.address().port;
+    console.log(`Backend server listening on port ${ACTIVE_PORT}`);
   });
 
   server.on('error', (err) => {
@@ -94,4 +120,9 @@ function startServer(port, attemptsLeft = 10) {
   });
 }
 
-startServer(PORT);
+// Only start the server if this file is executed directly.
+if (require.main === module) {
+  startServer(PORT);
+}
+
+module.exports = app;
